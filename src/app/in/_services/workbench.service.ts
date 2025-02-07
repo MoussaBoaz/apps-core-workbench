@@ -1,8 +1,10 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { from, Observable,of } from 'rxjs';
 import { ApiService } from 'sb-shared-lib';
 import { EmbeddedApiService } from 'src/app/_services/embedded-api.service';
 
+import { catchError, map } from 'rxjs/operators';
 
 @Injectable({
     providedIn: 'root'
@@ -38,6 +40,9 @@ export class WorkbenchService extends EmbeddedApiService {
         console.warn("New class name: ", new_class);
     }
 
+    public getPackagess(): Observable<string[]> {
+        return from(this.listPackages()); // Conversion Promise -> Observable
+    }
     /**
      * // TODO
      *
@@ -143,36 +148,40 @@ export class WorkbenchService extends EmbeddedApiService {
      * 
      * @throws An error if the node type is unknown or if the deletion fails.
      */
-    public async deleteNode(node: { package_name?: string; name: string; type: string; item?: any }): Promise<any> {
-        let res = null;
-        switch (node.type) {
-            case "view": {
-                let [entity, viewId] = node.name.split(":");
-                 // Vérifier si la vue est une vue par défaut
-                if (viewId.endsWith(".default")) {
-                return Promise.reject("Cannot delete a default view.");
+    public deleteNode(node: { package_name?: string; name: string; type: string; item?: any }): Observable<any> {
+        return from(new Promise(async (resolve, reject) => {
+            let res = null;
+            try {
+                switch (node.type) {
+                    case "view": {
+                        let [entity, viewId] = node.name.split(":");
+                        if (viewId.endsWith(".default")) {
+                            return reject("❌ Cannot delete a default view.");
+                        }
+                        res = await this.deleteView(entity, viewId);
+                        break;
+                    }
+                    case "menu":
+                        res = await this.deleteMenu(node.package_name!, node.name);
+                        break;
+                    case "package":
+                        res = await this.deletePackage(node.name);
+                        break;
+                    case "class":
+                        res = await this.deleteClass(node.package_name!, node.name);
+                        break;
+                    case "do":
+                    case "controller":
+                        res = await this.deleteController(node.package_name!, node.type, node.name);
+                        break;
+                    default:
+                        return reject("❌ Unknown type");
                 }
-                res = await this.deleteView(entity, viewId);
-                break;
+                res ? reject(res) : resolve(`✅ Deleted ${node.type}: ${node.name}`);
+            } catch (error) {
+                reject(error);
             }
-            case "menu":
-                res = await this.deleteMenu(node.package_name!, node.name);
-                break;
-            case "package":
-                res = await this.deletePackage(node.name);
-                break;
-            case "class":
-                console.log(node.package_name);
-                res = await this.deleteClass(node.package_name!, node.name);
-                break;
-            case "do":
-            case "controller":
-                res = await this.deleteController(node.package_name!, node.type, node.name);
-                break;
-            default:
-                return Promise.reject("Unknown type");
-        }
-        return res ? Promise.reject(res) : Promise.resolve(`Deleted ${node.type}: ${node.name}`);
+        }));
     }
 
     /**
@@ -244,6 +253,16 @@ export class WorkbenchService extends EmbeddedApiService {
         return result;
     }
 
+
+    public getClassess(): Observable<{ [package_name: string]: string[] }> {
+        return from(this.getClasses()).pipe(
+            catchError(error => {
+                console.warn('⚠️ Erreur lors de la récupération des classes:', error);
+                return of({}); // Retourne un objet vide en cas d'erreur
+            })
+        );
+    }
+    
     /**
      * Return all the classes foreach package
      *

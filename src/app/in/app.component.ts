@@ -46,7 +46,7 @@ export class AppComponent implements OnInit {
     }
 
     public async refresh() {
-        this.init();
+       console.log("oui")
     }
 
     // load all components
@@ -165,17 +165,19 @@ export class AppComponent implements OnInit {
 
 
 
-    public async deleteNode(node: { package?: string; name: string; type: string; item?: any }) {
-        this.api.deleteNode(node)
-            .then((message) => {
-                this.snackBar.open(message);
+    public deleteNode(node: { package?: string; name: string; type: string; item?: any }) {
+        this.api.deleteNode(node).subscribe({
+            next: (message) => {
+                this.snackBar.open(message, 'Close', { duration: 3000 });
                 this.selectedComponent = undefined;
-                this.refresh();
-            })
-            .catch((error) => {
-                console.error("Deletion error:", error.ok);
-                this.snackBar.open("Error: " + error);
-            });
+                this.refresh(); // Recharge la liste après suppression
+            },
+            error: (error) => {
+                console.error("❌ Deletion error:", error);
+                this.snackBar.open("❌ Error: " + error, 'Close', { duration: 3000 });
+            }
+        });
+    
     
     
 

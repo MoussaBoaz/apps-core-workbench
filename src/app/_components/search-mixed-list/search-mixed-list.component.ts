@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnInit, Output, SimpleChanges, ViewEncapsulation } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, SimpleChanges, ViewEncapsulation } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { MatDialog } from '@angular/material/dialog';
 import { EnvService } from 'sb-shared-lib';
@@ -9,7 +9,8 @@ import { DeleteConfirmationDialogComponent } from 'src/app/_dialogs/delete-confi
 
 import { WorkbenchService } from 'src/app/in/_services/workbench.service';
 import { EqualComponentDescriptor } from 'src/app/in/_models/equal-component-descriptor.class';
-
+import { Observable, Subject } from 'rxjs';
+import { map, takeUntil } from 'rxjs/operators';
 /**
  * This component is used to display the list of all object you recover in package.component.ts
  *
@@ -23,7 +24,7 @@ import { EqualComponentDescriptor } from 'src/app/in/_models/equal-component-des
     styleUrls: ['./search-mixed-list.component.scss'],
     encapsulation: ViewEncapsulation.Emulated
 })
-export class SearchMixedListComponent implements OnInit {
+export class SearchMixedListComponent implements OnInit, OnDestroy {
 
     // Selected node of the list (consistent with node_type, if provided): parent might force the selection of a node (goto)
     @Input() node_selected?: EqualComponentDescriptor;
@@ -56,7 +57,7 @@ export class SearchMixedListComponent implements OnInit {
     @Output() deleteNode = new EventEmitter<EqualComponentDescriptor>();
     // event for notifying parent that the list has been updated and needs to be refreshed
     @Output() updated = new EventEmitter();
-
+    private destroy$ = new Subject<void>();
     // Array of all components fetched from server
     public elements: EqualComponentDescriptor[] = [];
 
@@ -83,37 +84,168 @@ export class SearchMixedListComponent implements OnInit {
             private api: WorkbenchService
         ) {}
 
-    public async ngOnInit() {
-
-        // let arg = this.router.retrieveArgs();
-
-        this.search_scope = this.node_type ?? 'package';
-
-        this.loading = true;
-
-        await this.loadNodes();
-
-        // refresh filtering
-        this.selectSearchScope();
-
-        this.loading = false;
-    }
-
-    public async ngOnChanges(changes: SimpleChanges) {
-        if(changes.node_type && this.node_type) {
-            this.selectSearchScope();
+        ngOnInit() {
+            this.search_scope = this.node_type ?? 'package';
+            this.loading = true;
+    
+            console.log('🔄 ngOnInit() -> Chargement initial des packages...');
+            this.loadNodes(); // Charger la liste des packages au démarrage
+    
+            // 🔄 Écoute les mises à jour et recharge automatiquement les packages
+            this.updated.pipe(takeUntil(this.destroy$)).subscribe(() => {
+                console.log('🔄 updated.emit() détecté -> Rechargement des packages...');
+                this.loadNodes();
+            });
+    
+            this.loading = false;
         }
-        this.onSearch();
-    }
+        
+        ngOnDestroy() {
+            console.log('❌ Composant détruit, nettoyage des abonnements...');
+            this.destroy$.next(); // Indique que le composant est détruit
+            this.destroy$.complete(); // Termine le Subject pour libérer la mémoire
+        }
+        ngOnChanges(changes: SimpleChanges) {
+            console.log('🔄 ngOnChanges() détecté -> Changements détectés:', changes);
+            
+            if (changes.node_type && this.node_type) {
+                this.selectSearchScope();
+            }
+            this.onSearch();
+        }
+        
 
-    /**
-     * the behavior depends ont the member 'node_type'
-     * classes and packages are always loaded synchronously
-     * but then other components, if requested, are loaded in background
-     * except when node_type is set to a specific value (distinct from '')
-     */
-    private async loadNodes() {
+        private loadElementsFromApi<T>(
+            apiCall: (package_name: string) => Observable<T>, 
+            package_name: string,
+            transform: (data: T, package_name: string) => EqualComponentDescriptor[]
+        ): Observable<EqualComponentDescriptor[]> {
+            return apiCall(package_name).pipe(
+                takeUntil(this.destroy$),
+                map(data => {
+                    console.log(`📡 Données reçues pour le package ${package_name}:`, data);
+                    return transform(data, package_name);
+                })
+            );
+        }
 
+        
+
+        /**
+         * the behavior depends on the member 'node_type'
+         * classes and packages are always loaded synchronously
+         * but then other components, if requested, are loaded in background
+         * except when node_type is set to a specific value (distinct from '')
+         */
+        private loadNodes(): void {
+            console.log('📡 loadNodes() -> Récupération des packages en cours...');
+        
+            this.api.getPackagess().pipe(
+                takeUntil(this.destroy$),
+                map(packages => {
+                    console.log('📡 Packages récupérés depuis l’API:', packages);
+                    return (packages as string[]).map(package_name => ({
+                        package_name,
+                        name: package_name,
+                        type: "package",
+                        file: package_name
+                    }) as EqualComponentDescriptor);
+                })
+            ).subscribe(packageElements => {
+                console.log('✅ Mise à jour de this.elements avec les nouveaux packages:', packageElements);
+                this.elements = packageElements; // Stocke les packages récupérés
+                this.onSearch();})
+        
+                /*// 🔹 Extraire les noms des packages
+                const packages = packageElements.map(pkg => pkg.package_name);
+        
+                // Pass-2 : Charger les autres types d'éléments pour chaque package
+                let apiCalls: Observable<EqualComponentDescriptor[]>[] = [];
+        
+                for (const package_name of packages) {
+                    if (['', 'class'].includes(this.node_type ?? '')) {
+                        apiCalls.push(
+                            this.loadElementsFromApi(
+                                this.api.getClassesByPackage,
+                                package_name,
+                                (classes, package_name) =>
+                                    classes.map(class_name => ({
+                                        package_name,
+                                        name: class_name,
+                                        type: "class",
+                                        file: `${package_name}/classes/${class_name.replace(/\\/g, '/')}.class.php`
+                                    }))
+                            )
+                        );
+                    }
+        
+                    if (['', 'do', 'get', 'controller'].includes(this.node_type ?? '')) {
+                        apiCalls.push(
+                            this.loadElementsFromApi(
+                                this.api.getControllersByPackage,
+                                package_name,
+                                (data, package_name) => [
+                                    ...data.data.map(controller_name => ({
+                                        package_name,
+                                        name: controller_name,
+                                        type: "get",
+                                        file: `${package_name}/data/${controller_name}.php`
+                                    })),
+                                    ...data.actions.map(controller_name => ({
+                                        package_name,
+                                        name: controller_name,
+                                        type: "do",
+                                        file: `${package_name}/actions/${controller_name}.php`
+                                    }))
+                                ]
+                            )
+                        );
+                    }
+        
+                    if (['', 'route'].includes(this.node_type ?? '')) {
+                        apiCalls.push(
+                            this.loadElementsFromApi(
+                                this.api.getRoutesByPackage,
+                                package_name,
+                                (routes, package_name) => {
+                                    let routeElements: EqualComponentDescriptor[] = [];
+                                    for (let file in routes) {
+                                        for (let route_name in routes[file]) {
+                                            routeElements.push({
+                                                package_name,
+                                                name: route_name,
+                                                type: "route",
+                                                file: `${package_name}/init/routes/${file}`,
+                                                item: routes[file][route_name]
+                                            });
+                                        }
+                                    }
+                                    return routeElements;
+                                }
+                            )
+                        );
+                    }
+                }
+        
+                // Exécuter toutes les API calls en parallèle et mettre à jour `this.elements`
+                if (apiCalls.length > 0) {
+                    forkJoin(apiCalls).subscribe(results => {
+                        results.forEach(elements => this.elements.push(...elements));
+                        this.onSearch(); // Appliquer le filtre après l'ajout
+                        console.log('✅ Mise à jour complète de this.elements avec toutes les données.');
+                    });
+                }
+            });*/
+
+        
+
+
+        
+
+            
+
+
+/*
         // pass-1 - load packages and classes
         const classes = await this.api.getClasses();
         let packages = [];
@@ -229,7 +361,7 @@ export class SearchMixedListComponent implements OnInit {
                     }
                     this.sortComponents();
                 });
-        }
+        }*/
 
     }
 
@@ -417,13 +549,25 @@ export class SearchMixedListComponent implements OnInit {
         const dialogRef = this.dialog.open(DeleteConfirmationDialogComponent, {
             data: node.name,
         });
+    
         dialogRef.afterClosed().subscribe((result) => {
             if (result) {
-                this.deleteNode.emit(node);
+                console.log('🗑️ Suppression confirmée pour:', node);
+    
+                this.api.deleteNode(node).subscribe({
+                    next: (message) => {
+                        console.log(message); // Affiche "✅ Deleted package: xyz"
+                        this.updated.emit(); // Recharge les packages après suppression
+                    },
+                    error: (err) => {
+                        console.error('❌ Erreur lors de la suppression:', err);
+                    }
+                });
             }
         });
     }
-
+    
+    
 
 
 
@@ -450,3 +594,5 @@ export class SearchMixedListComponent implements OnInit {
         }
     }
 }
+
+
