@@ -16,6 +16,7 @@ export class MixedCreatorDialogComponent implements OnInit {
   // ------------------------------- ADD NEW TYPE HERE --------------------------------------------------------
 
     protected async casing() {
+        console.log(` dans Mixed = ${this.type}`);
         switch(this.type) {
             case "package" :
                 this.cachelist = this.cachepkglist;

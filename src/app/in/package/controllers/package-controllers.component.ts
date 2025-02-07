@@ -125,14 +125,13 @@ export class PackageControllersComponent implements OnInit {
     public oncreateController(event: { type: string, name: string }) {
         let d = this.matDialog.open(MixedCreatorDialogComponent,{
             data: {
-                type: event.type,
+                node_type: event.type,
                 package: this.package_name,
                 lock_type : true,
                 lock_package: true,
             },width : "40em",height: "26em"
         })
         d.afterClosed().subscribe(() => {
-            // Do stuff after the dialog has closed
             this.init()
         });
     }
