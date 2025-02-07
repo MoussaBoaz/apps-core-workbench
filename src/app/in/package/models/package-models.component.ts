@@ -56,9 +56,7 @@ export class PackageModelsComponent implements OnInit, OnDestroy {
         ) { }
 
     public async ngOnInit() {
-        this.packages = await this.api.getPackages();
-        this.eq_class = await this.api.getClasses();
-        this.types = await this.api.getTypes();
+
 
         this.init();
     }
