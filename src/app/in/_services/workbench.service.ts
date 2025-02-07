@@ -57,7 +57,7 @@ export class WorkbenchService extends EmbeddedApiService {
      * @param class_name - The name of the class.
      */
     public async deleteClass(package_name: string, class_name: string) {
-        // TODO
+        // Problème posé dans eQual, ça marche mais c'est juste que ça affiche comme erreur
         try {
             await this.api.fetch("?do=core_config_delete-model&package="+package_name+"&model="+class_name);
             return undefined;
@@ -143,7 +143,7 @@ export class WorkbenchService extends EmbeddedApiService {
      * 
      * @throws An error if the node type is unknown or if the deletion fails.
      */
-    public async deleteNode(node: { package?: string; name: string; type: string; item?: any }): Promise<any> {
+    public async deleteNode(node: { package_name?: string; name: string; type: string; item?: any }): Promise<any> {
         let res = null;
         switch (node.type) {
             case "view": {
@@ -156,18 +156,18 @@ export class WorkbenchService extends EmbeddedApiService {
                 break;
             }
             case "menu":
-                res = await this.deleteMenu(node.package!, node.name);
+                res = await this.deleteMenu(node.package_name!, node.name);
                 break;
             case "package":
                 res = await this.deletePackage(node.name);
                 break;
             case "class":
-                console.log("Nom =" + node.name);
-                res = await this.deleteClass(node.package!, node.name);
+                console.log(node.package_name);
+                res = await this.deleteClass(node.package_name!, node.name);
                 break;
             case "do":
             case "controller":
-                res = await this.deleteController(node.package!, node.type, node.name);
+                res = await this.deleteController(node.package_name!, node.type, node.name);
                 break;
             default:
                 return Promise.reject("Unknown type");
