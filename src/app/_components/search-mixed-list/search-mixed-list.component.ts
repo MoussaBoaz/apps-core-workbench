@@ -9,8 +9,8 @@ import { DeleteConfirmationDialogComponent } from 'src/app/_dialogs/delete-confi
 
 import { WorkbenchService } from 'src/app/in/_services/workbench.service';
 import { EqualComponentDescriptor } from 'src/app/in/_models/equal-component-descriptor.class';
-import { Observable, Subject } from 'rxjs';
-import { map, takeUntil } from 'rxjs/operators';
+import { forkJoin, Observable, of, Subject } from 'rxjs';
+import { map, switchMap, takeUntil } from 'rxjs/operators';
 /**
  * This component is used to display the list of all object you recover in package.component.ts
  *
@@ -115,21 +115,200 @@ export class SearchMixedListComponent implements OnInit, OnDestroy {
         }
         
 
-        private loadElementsFromApi<T>(
-            apiCall: (package_name: string) => Observable<T>, 
-            package_name: string,
-            transform: (data: T, package_name: string) => EqualComponentDescriptor[]
-        ): Observable<EqualComponentDescriptor[]> {
-            return apiCall(package_name).pipe(
-                takeUntil(this.destroy$),
-                map(data => {
-                    console.log(`📡 Données reçues pour le package ${package_name}:`, data);
-                    return transform(data, package_name);
-                })
-            );
-        }
 
         
+
+
+       /**
+ * This method loads packages and their corresponding classes.
+ * It adds the package names to the `elements` list and processes the classes 
+ * for each package if the `node_type` allows it.
+ * 
+ * @param packageList - List of package names to load.
+ * @param classes - Object containing classes for each package.
+ * @param elements - Array to store the components being processed.
+ */
+private loadPackagesAndClasses(packageList: string[], classes: any, elements: EqualComponentDescriptor[]): void {
+    for (const package_name of packageList) {
+        // Add package to elements if node_type is package or empty
+        if (["", "package"].includes(this.node_type ?? "")) {
+            elements.push({
+                package_name,
+                name: package_name,
+                type: "package",
+                file: package_name
+            } as EqualComponentDescriptor);
+        }
+
+        // Add classes to elements if node_type is class or empty
+        if (classes[package_name] && ["", "class"].includes(this.node_type ?? "")) {
+            for (const class_name of classes[package_name]) {
+                elements.push({
+                    package_name,
+                    name: class_name,
+                    type: "class",
+                    file: `${package_name}/classes/${class_name.replace(/\\/g, '/').concat('.class.php')}`
+                } as EqualComponentDescriptor);
+            }
+        }
+    }
+}
+
+/**
+ * This method processes controller data for each package.
+ * It adds controller names (GET and DO actions) to the `elements` list.
+ * 
+ * @param controllers - List of controller data for each package.
+ */
+private processControllers(controllers: any[]): void {
+    controllers.forEach(({ pkg, data }) => {
+        // Add controllers if node_type is "controller", "get", "do" or empty
+        if (["", "do", "get", "controller"].includes(this.node_type ?? "")) {
+            data.data.forEach((controller_name: string) => {
+                this.elements.push({
+                    package_name: pkg,
+                    name: controller_name,
+                    type: "get",
+                    file: `${pkg}/data/${controller_name}.php`
+                } as EqualComponentDescriptor);
+            });
+            data.actions.forEach((controller_name: string) => {
+                this.elements.push({
+                    package_name: pkg,
+                    name: controller_name,
+                    type: "do",
+                    file: `${pkg}/actions/${controller_name}.php`
+                } as EqualComponentDescriptor);
+            });
+        }
+    });
+}
+
+/**
+ * This method processes route data for each package.
+ * It adds route names and their associated files to the `elements` list.
+ * 
+ * @param routes - List of route data for each package.
+ */
+private processRoutes(routes: any[]): void {
+    routes.forEach(({ pkg, routes }) => {
+        // Add routes if node_type is "route" or empty
+        if (["", "route"].includes(this.node_type ?? "")) {
+            for (let file in routes) {
+                for (let route_name in routes[file]) {
+                    this.elements.push({
+                        package_name: pkg,
+                        name: route_name,
+                        type: "route",
+                        file: `${pkg}/init/routes/${file}`,
+                        item: routes[file][route_name]
+                    } as EqualComponentDescriptor);
+                }
+            }
+        }
+    });
+}
+
+/**
+ * This method processes view data for each package.
+ * It adds view names to the `elements` list.
+ * 
+ * @param views - List of view names for each package.
+ */
+private processViews(views: any[]): void {
+    views.forEach(({ pkg, views }) => {
+        // Add views if node_type is "view" or empty
+        if (["", "view"].includes(this.node_type ?? "")) {
+            views.forEach((view_name: any) => {
+                this.elements.push({
+                    package_name: pkg,
+                    name: view_name,
+                    type: "view"
+                } as EqualComponentDescriptor);
+            });
+        }
+    });
+}
+
+/**
+ * This method processes menu data for each package.
+ * It adds menu names to the `elements` list.
+ * 
+ * @param menus - List of menu names for each package.
+ */
+private processMenus(menus: any[]): void {
+    menus.forEach(({ pkg, menus }) => {
+        // Add menus if node_type is "menu" or empty
+        if (["", "menu"].includes(this.node_type ?? "")) {
+            menus.forEach((menu_name: any) => {
+                this.elements.push({
+                    package_name: pkg,
+                    name: menu_name,
+                    type: "menu"
+                } as EqualComponentDescriptor);
+            });
+        }
+    });
+}
+
+/**
+ * This method loads additional components (controllers, routes, views, menus) for each package.
+ * If `node_type` is not set (empty), it loads the components in the background.
+ * If `node_type` is specific, only the specified components are loaded.
+ * 
+ * @param packageList - List of package names to load additional components for.
+ * @returns An observable of the loaded components.
+ */
+private loadAdditionalComponents(packageList: string[]): Observable<EqualComponentDescriptor[]> {
+    console.log("loadAdditionalComponents called with packageList:", packageList);
+    
+    if (this.node_type && this.node_type !== '') {
+        console.log("Node type is set to:", this.node_type);
+        // If node_type is not empty, load components synchronously
+        return forkJoin({
+            controllers: forkJoin(packageList.map(pkg => this.api.getControllersByPackageObservable(pkg).pipe(map(data => ({ pkg, data }))))),
+            routes: forkJoin(packageList.map(pkg => this.api.getRoutesByPackageObservable(pkg).pipe(map(routes => ({ pkg, routes }))))),
+            views: forkJoin(packageList.map(pkg => this.api.getViewsByPackageObservable(pkg).pipe(map(views => ({ pkg, views }))))),
+            menus: forkJoin(packageList.map(pkg => this.api.getMenusByPackageObservable(pkg).pipe(map(menus => ({ pkg, menus }))))),
+        }).pipe(
+            map(({ controllers, routes, views, menus }) => {
+                console.log("Controllers:", controllers);
+                console.log("Routes:", routes);
+                console.log("Views:", views);
+                console.log("Menus:", menus);
+                
+                this.processControllers(controllers);
+                this.processRoutes(routes);
+                this.processViews(views);
+                this.processMenus(menus);
+                return this.elements;
+            })
+        );
+    } else {
+        console.log("Node type is empty. Loading components asynchronously...");
+        // If node_type is empty, load components asynchronously with a delay
+        setTimeout(() => {
+            forkJoin({
+                controllers: forkJoin(packageList.map(pkg => this.api.getControllersByPackageObservable(pkg).pipe(map(data => ({ pkg, data }))))),
+                routes: forkJoin(packageList.map(pkg => this.api.getRoutesByPackageObservable(pkg).pipe(map(routes => ({ pkg, routes }))))),
+                views: forkJoin(packageList.map(pkg => this.api.getViewsByPackageObservable(pkg).pipe(map(views => ({ pkg, views }))))),
+                menus: forkJoin(packageList.map(pkg => this.api.getMenusByPackageObservable(pkg).pipe(map(menus => ({ pkg, menus }))))),
+            }).subscribe(({ controllers, routes, views, menus }) => {
+                console.log("Controllers:", controllers);
+                console.log("Routes:", routes);
+                console.log("Views:", views);
+                console.log("Menus:", menus);
+                
+                this.processControllers(controllers);
+                this.processRoutes(routes);
+                this.processViews(views);
+                this.processMenus(menus);
+                this.sortComponents();
+            });
+        });
+        return of([]);
+    }
+}
 
         /**
          * the behavior depends on the member 'node_type'
@@ -138,104 +317,29 @@ export class SearchMixedListComponent implements OnInit, OnDestroy {
          * except when node_type is set to a specific value (distinct from '')
          */
         private loadNodes(): void {
-            console.log('📡 loadNodes() -> Récupération des packages en cours...');
-        
-            this.api.getPackagess().pipe(
+            this.api.getPackagesObservable().pipe(
                 takeUntil(this.destroy$),
-                map(packages => {
-                    console.log('📡 Packages récupérés depuis l’API:', packages);
-                    return (packages as string[]).map(package_name => ({
-                        package_name,
-                        name: package_name,
-                        type: "package",
-                        file: package_name
-                    }) as EqualComponentDescriptor);
+                switchMap(packages => {
+                    let packageList: string[] = this.package_name && this.package_name !== '' ? [this.package_name] : packages;
+                    let elements: EqualComponentDescriptor[] = [];
+        
+                    return this.api.getClassesObservable().pipe(
+                        map(classes => {
+                            this.loadPackagesAndClasses(packageList, classes, elements);
+                            this.elements = elements;
+                            this.sortComponents();
+                            this.onSearch();
+                            return elements;
+                        }),
+                        switchMap(() => this.loadAdditionalComponents(packageList))
+                    );
                 })
-            ).subscribe(packageElements => {
-                console.log('✅ Mise à jour de this.elements avec les nouveaux packages:', packageElements);
-                this.elements = packageElements; // Stocke les packages récupérés
-                this.onSearch();})
+            ).subscribe(
+            );
+            
+            
+            
         
-                /*// 🔹 Extraire les noms des packages
-                const packages = packageElements.map(pkg => pkg.package_name);
-        
-                // Pass-2 : Charger les autres types d'éléments pour chaque package
-                let apiCalls: Observable<EqualComponentDescriptor[]>[] = [];
-        
-                for (const package_name of packages) {
-                    if (['', 'class'].includes(this.node_type ?? '')) {
-                        apiCalls.push(
-                            this.loadElementsFromApi(
-                                this.api.getClassesByPackage,
-                                package_name,
-                                (classes, package_name) =>
-                                    classes.map(class_name => ({
-                                        package_name,
-                                        name: class_name,
-                                        type: "class",
-                                        file: `${package_name}/classes/${class_name.replace(/\\/g, '/')}.class.php`
-                                    }))
-                            )
-                        );
-                    }
-        
-                    if (['', 'do', 'get', 'controller'].includes(this.node_type ?? '')) {
-                        apiCalls.push(
-                            this.loadElementsFromApi(
-                                this.api.getControllersByPackage,
-                                package_name,
-                                (data, package_name) => [
-                                    ...data.data.map(controller_name => ({
-                                        package_name,
-                                        name: controller_name,
-                                        type: "get",
-                                        file: `${package_name}/data/${controller_name}.php`
-                                    })),
-                                    ...data.actions.map(controller_name => ({
-                                        package_name,
-                                        name: controller_name,
-                                        type: "do",
-                                        file: `${package_name}/actions/${controller_name}.php`
-                                    }))
-                                ]
-                            )
-                        );
-                    }
-        
-                    if (['', 'route'].includes(this.node_type ?? '')) {
-                        apiCalls.push(
-                            this.loadElementsFromApi(
-                                this.api.getRoutesByPackage,
-                                package_name,
-                                (routes, package_name) => {
-                                    let routeElements: EqualComponentDescriptor[] = [];
-                                    for (let file in routes) {
-                                        for (let route_name in routes[file]) {
-                                            routeElements.push({
-                                                package_name,
-                                                name: route_name,
-                                                type: "route",
-                                                file: `${package_name}/init/routes/${file}`,
-                                                item: routes[file][route_name]
-                                            });
-                                        }
-                                    }
-                                    return routeElements;
-                                }
-                            )
-                        );
-                    }
-                }
-        
-                // Exécuter toutes les API calls en parallèle et mettre à jour `this.elements`
-                if (apiCalls.length > 0) {
-                    forkJoin(apiCalls).subscribe(results => {
-                        results.forEach(elements => this.elements.push(...elements));
-                        this.onSearch(); // Appliquer le filtre après l'ajout
-                        console.log('✅ Mise à jour complète de this.elements avec toutes les données.');
-                    });
-                }
-            });*/
 
         
 

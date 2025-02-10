@@ -42,10 +42,10 @@ export class AppComponent implements OnInit {
             this.selectNode(args['selected']);
         }
         */
-        await this.init();
+        //await this.init();
     }
 
-    public async refresh() {
+    /*public async refresh() {
        console.log("oui")
     }
 
@@ -57,7 +57,7 @@ export class AppComponent implements OnInit {
         this.initialized_packages = await this.api.getInitializedPackages();
 
         this.loading = false;
-    }
+    }*/
 
     /**
      * Select a package when user clicks on it.
@@ -170,7 +170,7 @@ export class AppComponent implements OnInit {
             next: (message) => {
                 this.snackBar.open(message, 'Close', { duration: 3000 });
                 this.selectedComponent = undefined;
-                this.refresh(); // Recharge la liste après suppression
+                //this.refresh(); // Recharge la liste après suppression
             },
             error: (error) => {
                 console.error("❌ Deletion error:", error);

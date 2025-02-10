@@ -40,7 +40,7 @@ export class WorkbenchService extends EmbeddedApiService {
         console.warn("New class name: ", new_class);
     }
 
-    public getPackagess(): Observable<string[]> {
+    public getPackagesObservable(): Observable<string[]> {
         return from(this.listPackages()); // Conversion Promise -> Observable
     }
     /**
@@ -184,6 +184,7 @@ export class WorkbenchService extends EmbeddedApiService {
         }));
     }
 
+    
     /**
      * TODO
      */
@@ -254,13 +255,8 @@ export class WorkbenchService extends EmbeddedApiService {
     }
 
 
-    public getClassess(): Observable<{ [package_name: string]: string[] }> {
-        return from(this.getClasses()).pipe(
-            catchError(error => {
-                console.warn('⚠️ Erreur lors de la récupération des classes:', error);
-                return of({}); // Retourne un objet vide en cas d'erreur
-            })
-        );
+    public getClassesObservable(): Observable<{ [package_name: string]: string[] }> {
+        return from(this.getClasses());
     }
     
     /**
@@ -378,6 +374,9 @@ export class WorkbenchService extends EmbeddedApiService {
         return result;
     }
 
+    public getRoutesByPackageObservable(pkg: string): Observable<any[]> {
+        return from(this.getRoutesByPackage(pkg));
+      }
     public async getRoutesLive() {
         let result = {};
         if(this.cache.hasOwnProperty('routes')) {
@@ -394,6 +393,10 @@ export class WorkbenchService extends EmbeddedApiService {
         }
         return result;
     }
+
+    public getControllersByPackageObservable(package_name: string): Observable<{ data: string[], actions: string[] }> {
+        return from(this.getControllersByPackage(package_name));
+      }
 
     public async getControllersByPackage(package_name: string): Promise<{data: string[], actions: string[]}> {
         let result = {data:[], actions:[]};
@@ -415,6 +418,10 @@ export class WorkbenchService extends EmbeddedApiService {
         return result;
     }
 
+    public getViewsByPackageObservable(package_name: string): Observable<string[]> {
+        return from(this.getViewsByPackage(package_name));
+      }
+
     public async getViewsByPackage(package_name: string): Promise<string[]> {
         let result = [];
         if(this.cache.hasOwnProperty('views') && this.cache.views.hasOwnProperty(package_name)) {
@@ -434,6 +441,10 @@ export class WorkbenchService extends EmbeddedApiService {
         }
         return result;
     }
+
+    public getMenusByPackageObservable(package_name: string): Observable<string[]> {
+        return from(this.getMenusByPackage(package_name));
+      }
 
     public async getMenusByPackage(package_name:string): Promise<string[]> {
         let result = [];
