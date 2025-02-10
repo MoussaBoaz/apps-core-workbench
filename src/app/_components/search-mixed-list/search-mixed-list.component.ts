@@ -151,6 +151,8 @@ private loadPackagesAndClasses(packageList: string[], classes: any, elements: Eq
                 } as EqualComponentDescriptor);
             }
         }
+
+
     }
 }
 
@@ -160,12 +162,12 @@ private loadPackagesAndClasses(packageList: string[], classes: any, elements: Eq
  * 
  * @param controllers - List of controller data for each package.
  */
-private processControllers(controllers: any[]): void {
+private processControllers(controllers: any[], elements: EqualComponentDescriptor[]): void {
     controllers.forEach(({ pkg, data }) => {
         // Add controllers if node_type is "controller", "get", "do" or empty
         if (["", "do", "get", "controller"].includes(this.node_type ?? "")) {
             data.data.forEach((controller_name: string) => {
-                this.elements.push({
+                elements.push({
                     package_name: pkg,
                     name: controller_name,
                     type: "get",
@@ -173,7 +175,7 @@ private processControllers(controllers: any[]): void {
                 } as EqualComponentDescriptor);
             });
             data.actions.forEach((controller_name: string) => {
-                this.elements.push({
+                elements.push({
                     package_name: pkg,
                     name: controller_name,
                     type: "do",
@@ -190,13 +192,13 @@ private processControllers(controllers: any[]): void {
  * 
  * @param routes - List of route data for each package.
  */
-private processRoutes(routes: any[]): void {
+private processRoutes(routes: any[], elements: EqualComponentDescriptor[]): void {
     routes.forEach(({ pkg, routes }) => {
         // Add routes if node_type is "route" or empty
         if (["", "route"].includes(this.node_type ?? "")) {
             for (let file in routes) {
                 for (let route_name in routes[file]) {
-                    this.elements.push({
+                    elements.push({
                         package_name: pkg,
                         name: route_name,
                         type: "route",
@@ -215,12 +217,12 @@ private processRoutes(routes: any[]): void {
  * 
  * @param views - List of view names for each package.
  */
-private processViews(views: any[]): void {
+private processViews(views: any[], elements: EqualComponentDescriptor[]): void {
     views.forEach(({ pkg, views }) => {
         // Add views if node_type is "view" or empty
         if (["", "view"].includes(this.node_type ?? "")) {
             views.forEach((view_name: any) => {
-                this.elements.push({
+                elements.push({
                     package_name: pkg,
                     name: view_name,
                     type: "view"
@@ -236,12 +238,12 @@ private processViews(views: any[]): void {
  * 
  * @param menus - List of menu names for each package.
  */
-private processMenus(menus: any[]): void {
+private processMenus(menus: any[], elements: EqualComponentDescriptor[]): void {
     menus.forEach(({ pkg, menus }) => {
         // Add menus if node_type is "menu" or empty
         if (["", "menu"].includes(this.node_type ?? "")) {
             menus.forEach((menu_name: any) => {
-                this.elements.push({
+                elements.push({
                     package_name: pkg,
                     name: menu_name,
                     type: "menu"
@@ -260,55 +262,84 @@ private processMenus(menus: any[]): void {
  * @returns An observable of the loaded components.
  */
 private loadAdditionalComponents(packageList: string[]): Observable<EqualComponentDescriptor[]> {
-    console.log("loadAdditionalComponents called with packageList:", packageList);
-    
-    if (this.node_type && this.node_type !== '') {
-        console.log("Node type is set to:", this.node_type);
-        // If node_type is not empty, load components synchronously
-        return forkJoin({
-            controllers: forkJoin(packageList.map(pkg => this.api.getControllersByPackageObservable(pkg).pipe(map(data => ({ pkg, data }))))),
-            routes: forkJoin(packageList.map(pkg => this.api.getRoutesByPackageObservable(pkg).pipe(map(routes => ({ pkg, routes }))))),
-            views: forkJoin(packageList.map(pkg => this.api.getViewsByPackageObservable(pkg).pipe(map(views => ({ pkg, views }))))),
-            menus: forkJoin(packageList.map(pkg => this.api.getMenusByPackageObservable(pkg).pipe(map(menus => ({ pkg, menus }))))),
-        }).pipe(
-            map(({ controllers, routes, views, menus }) => {
-                console.log("Controllers:", controllers);
-                console.log("Routes:", routes);
-                console.log("Views:", views);
-                console.log("Menus:", menus);
-                
-                this.processControllers(controllers);
-                this.processRoutes(routes);
-                this.processViews(views);
-                this.processMenus(menus);
-                return this.elements;
-            })
-        );
-    } else {
-        console.log("Node type is empty. Loading components asynchronously...");
-        // If node_type is empty, load components asynchronously with a delay
-        setTimeout(() => {
-            forkJoin({
+    let apiCalls$: Observable<any>;
+
+    // Choisir les appels API en fonction de node_type
+    switch (this.node_type) {
+        case 'controller':
+            apiCalls$ = forkJoin({
+                controllers: forkJoin(packageList.map(pkg => 
+                    this.api.getControllersByPackageObservable(pkg).pipe(
+                        map(data => ({ pkg, data }))
+                    )
+                ))
+            });
+            break;
+        case 'route':
+            apiCalls$ = forkJoin({
+                routes: forkJoin(packageList.map(pkg => 
+                    this.api.getRoutesByPackageObservable(pkg).pipe(
+                        map(routes => ({ pkg, routes }))
+                    )
+                ))
+            });
+            break;
+        case 'view':
+            apiCalls$ = forkJoin({
+                views: forkJoin(packageList.map(pkg => 
+                    this.api.getViewsByPackageObservable(pkg).pipe(
+                        map(views => ({ pkg, views }))
+                    )
+                ))
+            });
+            console.log("je suis view et j'ai été appelé");
+            break;
+        case 'menu':
+            apiCalls$ = forkJoin({
+                menus: forkJoin(packageList.map(pkg => 
+                    this.api.getMenusByPackageObservable(pkg).pipe(
+                        map(menus => ({ pkg, menus }))
+                    )
+                ))
+            });
+            break;
+        default:
+            // Si node_type est vide ou inconnu, appeler tous les endpoints
+             apiCalls$ = forkJoin({
                 controllers: forkJoin(packageList.map(pkg => this.api.getControllersByPackageObservable(pkg).pipe(map(data => ({ pkg, data }))))),
                 routes: forkJoin(packageList.map(pkg => this.api.getRoutesByPackageObservable(pkg).pipe(map(routes => ({ pkg, routes }))))),
                 views: forkJoin(packageList.map(pkg => this.api.getViewsByPackageObservable(pkg).pipe(map(views => ({ pkg, views }))))),
                 menus: forkJoin(packageList.map(pkg => this.api.getMenusByPackageObservable(pkg).pipe(map(menus => ({ pkg, menus }))))),
-            }).subscribe(({ controllers, routes, views, menus }) => {
-                console.log("Controllers:", controllers);
-                console.log("Routes:", routes);
-                console.log("Views:", views);
-                console.log("Menus:", menus);
-                
-                this.processControllers(controllers);
-                this.processRoutes(routes);
-                this.processViews(views);
-                this.processMenus(menus);
-                this.sortComponents();
             });
-        });
-        return of([]);
+            console.log("je n'ai personne et j'ai été appelé");
     }
+
+    return apiCalls$.pipe(
+        map((results) => {
+            let newElements: EqualComponentDescriptor[] = [];
+
+            if (results.controllers && ["", "do", "get", "controller"].includes(this.node_type ?? '')) {
+                this.processControllers(results.controllers, newElements);
+            }
+            if (results.routes && ["", "route"].includes(this.node_type ?? '')) {
+                this.processRoutes(results.routes, newElements);
+            }
+            if (results.views && ["", "view"].includes(this.node_type ?? '')) {
+                this.processViews(results.views, newElements);
+            }
+            if (results.menus && ["", "menu"].includes(this.node_type ?? '')) {
+                this.processMenus(results.menus, newElements);
+            }
+
+            console.log('Nouveaux éléments ajoutés :', newElements);  // Log pour vérifier
+            this.elements = [...this.elements, ...newElements] // Forcer une nouvelle référence
+            this.sortComponents();
+            this.onSearch();
+            return this.elements;
+        })
+    );
 }
+
 
         /**
          * the behavior depends on the member 'node_type'
@@ -317,25 +348,65 @@ private loadAdditionalComponents(packageList: string[]): Observable<EqualCompone
          * except when node_type is set to a specific value (distinct from '')
          */
         private loadNodes(): void {
-            this.api.getPackagesObservable().pipe(
+            /*this.api.getPackagesObservable().pipe(
                 takeUntil(this.destroy$),
                 switchMap(packages => {
                     let packageList: string[] = this.package_name && this.package_name !== '' ? [this.package_name] : packages;
                     let elements: EqualComponentDescriptor[] = [];
         
-                    return this.api.getClassesObservable().pipe(
-                        map(classes => {
+                    // On prend le premier package de packageList
+                    const firstPackage = packageList[0];
+        
+                    // Utilisation de forkJoin pour effectuer les appels en parallèle
+                    return forkJoin([
+                        this.api.getClassesObservable(),
+                        forkJoin(packageList.map(pkg => this.api.getViewsByPackageObservable(pkg).pipe(map(views => ({ pkg, views }))))), // Appel à getViewsByPackageObservable pour le premier package
+                    ]).pipe(
+                        map(([classes, views]) => {
+                            console.log('Vues pour le premier package:', views);
+                            // Traite les classes et les vues après réception des deux appels
                             this.loadPackagesAndClasses(packageList, classes, elements);
+                            this.processViews(views,elements)
                             this.elements = elements;
                             this.sortComponents();
                             this.onSearch();
                             return elements;
-                        }),
-                        switchMap(() => this.loadAdditionalComponents(packageList))
+                        })
                     );
                 })
             ).subscribe(
+                (elements) => {
+                    console.log('Nouvelle liste des éléments:', this.filteredData); // Console.log dans le subscribe
+                }
+            );*/
+        
+    this.api.getPackagesObservable().pipe(
+        takeUntil(this.destroy$),
+        switchMap(packages => {
+            let packageList: string[] = this.package_name && this.package_name !== '' ? [this.package_name] : packages;
+            let elements: EqualComponentDescriptor[] = [];
+
+            return this.api.getClassesObservable().pipe(
+                map(classes => {
+                    this.loadPackagesAndClasses(packageList, classes, elements);
+                    this.elements = elements;
+                    this.sortComponents();
+                    this.onSearch();
+                    return elements;
+                }),
+                switchMap(() => { 
+                    return this.loadAdditionalComponents(packageList);})
             );
+        })
+    ).subscribe(
+        (finalElements: EqualComponentDescriptor[]) => {
+            console.log('Éléments finaux après mise à jour :', finalElements);
+            this.elements = finalElements;
+        },
+        (error) => {
+            console.error('Erreur lors du chargement des composants:', error);
+        }
+    );
             
             
             

@@ -24,6 +24,7 @@ export class EmbeddedApiService {
         return res + "}";
     }
 
+    
     public async deleteView(entity:string,view_id:string): Promise<any|undefined>{
         try {
             await this.api.fetch("?do=core_config_delete-view&entity="+entity+"&view_id="+view_id);

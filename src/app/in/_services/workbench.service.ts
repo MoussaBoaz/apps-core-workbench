@@ -265,7 +265,15 @@ export class WorkbenchService extends EmbeddedApiService {
      * @returns A JSON with package as key and classes as value.
      */
     public async getClasses(): Promise<{[id: string]: string[]}> {
-        let result = {};
+        try {
+            return await this.api.fetch('?get=core_config_classes');
+        }
+        catch (response: any) {
+            console.warn('fetch class error', response);
+            return {};
+        }
+
+        /*let result = {};
         if(this.cache.hasOwnProperty('classes')) {
             result = this.cache.classes;
         }
@@ -278,7 +286,7 @@ export class WorkbenchService extends EmbeddedApiService {
                 console.warn('fetch class error', response);
             }
         }
-        return result;
+        return result;*/
     }
 
     /**
@@ -374,9 +382,9 @@ export class WorkbenchService extends EmbeddedApiService {
         return result;
     }
 
-    public getRoutesByPackageObservable(pkg: string): Observable<any[]> {
-        return from(this.getRoutesByPackage(pkg));
-      }
+   public getRoutesByPackageObservable(pkg: string): Observable<any[]> {
+    return from(this.getRoutesByPackage(pkg));
+  }
     public async getRoutesLive() {
         let result = {};
         if(this.cache.hasOwnProperty('routes')) {
@@ -399,6 +407,16 @@ export class WorkbenchService extends EmbeddedApiService {
       }
 
     public async getControllersByPackage(package_name: string): Promise<{data: string[], actions: string[]}> {
+
+
+        try {
+            return await this.api.fetch('?get=core_config_controllers&package=' + package_name);
+        }
+        catch (response: any) {
+            console.warn('request error', response);
+            return {data:[], actions:[]};
+        }
+        /*
         let result = {data:[], actions:[]};
         if(this.cache.hasOwnProperty('controllers') && this.cache.controllers.hasOwnProperty(package_name)) {
             result = this.cache.controllers[package_name];
@@ -415,7 +433,7 @@ export class WorkbenchService extends EmbeddedApiService {
                 console.warn('request error', response);
             }
         }
-        return result;
+        return result;*/
     }
 
     public getViewsByPackageObservable(package_name: string): Observable<string[]> {
@@ -423,7 +441,16 @@ export class WorkbenchService extends EmbeddedApiService {
       }
 
     public async getViewsByPackage(package_name: string): Promise<string[]> {
-        let result = [];
+        // le cache pose des soucis alors je l'enléve le temps d'avoir une version fonctionnel
+        try {
+            return await this.api.fetch("?get=core_config_views&package="+package_name)
+        }
+        catch(response) {
+            console.warn('fetch views by package error', response);
+            return [];
+        }
+
+        /*let result = [];
         if(this.cache.hasOwnProperty('views') && this.cache.views.hasOwnProperty(package_name)) {
             result = this.cache.views[package_name];
         }
@@ -439,7 +466,7 @@ export class WorkbenchService extends EmbeddedApiService {
                 console.warn('fetch views by package error', response);
             }
         }
-        return result;
+        return result;*/
     }
 
     public getMenusByPackageObservable(package_name: string): Observable<string[]> {
@@ -447,7 +474,15 @@ export class WorkbenchService extends EmbeddedApiService {
       }
 
     public async getMenusByPackage(package_name:string): Promise<string[]> {
-        let result = [];
+
+        try {
+            return await this.api.fetch("?get=core_config_menus&package="+package_name)
+        }
+        catch(response) {
+            console.warn('fetch menus by package error', response);
+            return [];
+        }
+        /*let result = [];
         if(this.cache.hasOwnProperty('menus') && this.cache.menus.hasOwnProperty(package_name)) {
             result = this.cache.menus[package_name];
         }
@@ -463,7 +498,7 @@ export class WorkbenchService extends EmbeddedApiService {
                 console.warn('fetch menus by package error', response);
             }
         }
-        return result;
+        return result;*/
     }
 
 
